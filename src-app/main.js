@@ -15,7 +15,7 @@ import { renderSettings } from './views/settings.js';
 
 const ROUTES = [
   { key: 'dashboard', label: 'Dashboard', icon: icon.dashboard, view: renderDashboard, roles: ['owner', 'manager', 'cashier'] },
-  { key: 'pos', label: 'Point of sale', icon: icon.pos, view: renderPOS, roles: ['owner', 'manager', 'cashier'] },
+  { key: 'pos', label: 'Record sale', icon: icon.pos, view: renderPOS, roles: ['owner', 'manager', 'cashier'] },
   { key: 'sales', label: 'Sales', icon: icon.sales, view: renderSales, roles: ['owner', 'manager', 'cashier'] },
   { key: 'inventory', label: 'Inventory', icon: icon.inventory, view: renderInventory, roles: ['owner', 'manager', 'cashier'] },
   { key: 'customers', label: 'Customers', icon: icon.customers, view: renderCustomers, roles: ['owner', 'manager', 'cashier'] },
@@ -147,6 +147,11 @@ function renderShell() {
       <main id="view" class="view" tabindex="-1"></main>
     </div>
     <div class="scrim" id="scrim"></div>
+    <nav class="bottom-nav" aria-label="Quick links">
+      ${['dashboard', 'pos', 'sales', 'inventory'].map((k) => { const x = ROUTES.find((y) => y.key === k);
+        return `<a href="#/${k}" class="${k === r.key ? 'active' : ''} ${k === 'pos' ? 'sell' : ''}" ${k === r.key ? 'aria-current="page"' : ''}>${x.icon}<span>${k === 'pos' ? 'Sell' : k === 'inventory' ? 'Stock' : x.label}</span></a>`; }).join('')}
+      <button type="button" id="bottom-more">${icon.menu}<span>More</span></button>
+    </nav>
   </div>`;
 
   document.getElementById('logout').onclick = async () => {
@@ -165,6 +170,7 @@ function renderShell() {
   });
   const sidebar = document.getElementById('sidebar'); const scrim = document.getElementById('scrim');
   document.getElementById('menu-btn').onclick = () => { sidebar.classList.add('open'); scrim.classList.add('show'); };
+  document.getElementById('bottom-more').onclick = () => { sidebar.classList.add('open'); scrim.classList.add('show'); };
   scrim.onclick = () => { sidebar.classList.remove('open'); scrim.classList.remove('show'); };
   bindSyncPill();
   renderView();

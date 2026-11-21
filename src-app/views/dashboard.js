@@ -40,7 +40,9 @@ export async function renderDashboard(el, ctx) {
   const head = `<div class="toolbar">
     <div class="seg" role="group" aria-label="Period">${Object.entries(PERIODS).map(([k, v]) =>
       `<button class="${k === period ? 'on' : ''}" data-period="${k}" aria-pressed="${k === period}">${v}</button>`).join('')}</div>
-    <div class="muted small">${esc(state.branch === 'all' ? 'All branches' : branchName(state.branch))}</div></div>
+    <div class="muted small">${esc(state.branch === 'all' ? 'All branches' : branchName(state.branch))}</div>
+    <div class="grow"></div>
+    <a class="btn primary" href="#/pos">${icon.plus}<span>Record a sale</span></a></div>
     ${stale ? `<div class="alert warn">${icon.wifiOff}<span>You're offline. These figures were last updated ${fmtDateTime(stale)}.</span></div>` : ''}`;
 
   if (!d) {
