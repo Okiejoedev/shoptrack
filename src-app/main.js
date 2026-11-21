@@ -50,7 +50,7 @@ function renderLogin(err = '') {
   app.innerHTML = `
   <div class="login">
     <div class="login-art" aria-hidden="true">
-      <div class="brand big"><span class="logo">S</span> ShopTrack</div>
+      <div class="brand big"><span class="logo">A</span> Anayo 5PS Enterprises</div>
       <p class="login-tag">Sales, stock and money for Nigerian shops: on the counter, in the store room and on the owner's phone. Even when the network is gone.</p>
       <div class="login-stats">
         <div><strong>Point of sale</strong><span>Works offline</span></div>
@@ -123,7 +123,7 @@ function renderShell() {
   app.innerHTML = `
   <div class="shell">
     <aside class="sidebar" id="sidebar">
-      <div class="brand"><span class="logo">S</span><div><div class="brand-name">${esc(state.settings.business_name || 'ShopTrack')}</div><div class="brand-sub">ShopTrack</div></div></div>
+      <div class="brand"><span class="logo">A</span><div><div class="brand-name">${esc(state.settings.business_name || 'Anayo 5PS Enterprises')}</div><div class="brand-sub">Sales &amp; inventory</div></div></div>
       <nav aria-label="Main">${nav.map((x) => `<a href="#/${x.key}" class="nav-link ${x.key === r.key ? 'active' : ''}" ${x.key === r.key ? 'aria-current="page"' : ''}>${x.icon}<span>${x.label}</span></a>`).join('')}</nav>
       <div class="sidebar-foot">
         <div class="me"><div class="avatar">${esc((state.profile?.full_name || '?').slice(0, 1))}</div>

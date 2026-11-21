@@ -14,7 +14,7 @@ const emit = () => listeners.forEach((fn) => { try { fn(); } catch (e) { console
 export const state = {
   session: null,
   profile: null,
-  settings: { business_name: 'ShopTrack', receipt_footer: '' },
+  settings: { business_name: 'Anayo 5PS Enterprises', receipt_footer: '' },
   branches: [],
   branch: null,          // selected branch id, or 'all' (owner/manager)
   products: [],

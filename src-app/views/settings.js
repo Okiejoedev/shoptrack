@@ -26,7 +26,7 @@ export async function renderSettings(el, ctx) {
     </section>
     <section class="card span-2">
       <div class="card-head"><h2>Install on phones and tills</h2></div>
-      <p>ShopTrack installs like an app and keeps working with no internet. On Android Chrome, open the menu and tap <strong>Install app</strong> (or <strong>Add to Home screen</strong>). On iPhone Safari, tap <strong>Share → Add to Home Screen</strong>. On a laptop, click the install icon in the address bar.</p>
+      <p>The app installs like an app and keeps working with no internet. On Android Chrome, open the menu and tap <strong>Install app</strong> (or <strong>Add to Home screen</strong>). On iPhone Safari, tap <strong>Share → Add to Home Screen</strong>. On a laptop, click the install icon in the address bar.</p>
       <p class="muted">Each device keeps its own copy of products, prices and stock. Sales made offline sync automatically when the connection returns, and nothing is lost if the app is closed.</p>
     </section>
   </div>`;

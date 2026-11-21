@@ -4,7 +4,7 @@ import { esc, naira, fmtDateTime, modal, icon, METHOD_LABEL, waLink, num } from 
 // r: { id, receipt_no, created_at, branch_id, cashier, items:[{name, qty, unit_price}], subtotal, discount, total, amount_paid, method, customer, pending, status }
 export function receiptText(r) {
   const lines = [
-    state.settings.business_name || 'ShopTrack',
+    state.settings.business_name || 'Anayo 5PS Enterprises',
     `${branchName(r.branch_id)} branch`,
     `Receipt ${r.receipt_no ? '#' + r.receipt_no : '(pending sync)'} · ${fmtDateTime(r.created_at)}`,
     '',
@@ -23,7 +23,7 @@ export function receiptText(r) {
 export function receiptHtml(r) {
   const owed = r.total - r.amount_paid;
   return `<div class="receipt" id="receipt-print">
-    <div class="r-center"><div class="r-shop">${esc(state.settings.business_name || 'ShopTrack')}</div>
+    <div class="r-center"><div class="r-shop">${esc(state.settings.business_name || 'Anayo 5PS Enterprises')}</div>
     <div>${esc(branchName(r.branch_id))} branch${state.settings.phone ? ' · ' + esc(state.settings.phone) : ''}</div>
     <div>${r.receipt_no ? 'Receipt #' + r.receipt_no : 'Receipt · waiting to sync'}</div>
     <div>${fmtDateTime(r.created_at)}${r.cashier ? ' · ' + esc(r.cashier) : ''}</div></div>

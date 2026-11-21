@@ -1,4 +1,4 @@
-# ShopTrack — Sales & Inventory for Nigerian shops
+# Anayo 5PS Enterprises — Sales & Inventory
 
 Live app: https://okiejoedev.github.io/shoptrack/
 

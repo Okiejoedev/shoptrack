@@ -10,8 +10,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg', 'icon-192.png', 'icon-512.png'],
       manifest: {
-        name: 'ShopTrack · Sales & Inventory',
-        short_name: 'ShopTrack',
+        name: 'Anayo 5PS Enterprises · Sales & Inventory',
+        short_name: 'Anayo 5PS',
         description: 'Sales, inventory, purchasing and debtors for Nigerian shops. Works offline.',
         theme_color: '#0B3D2E',
         background_color: '#F4F5F1',

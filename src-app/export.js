@@ -31,9 +31,9 @@ export async function toPDF(filename, title, subtitle, columns, rows, summary = 
   const W = doc.internal.pageSize.getWidth();
   doc.setFillColor(11, 61, 46); doc.rect(0, 0, W, 64, 'F');
   doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
-  doc.text(state.settings.business_name || 'ShopTrack', 40, 30);
+  doc.text(state.settings.business_name || 'Anayo 5PS Enterprises', 40, 30);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-  doc.text('ShopTrack report · generated ' + new Date().toLocaleString('en-GB', { timeZone: 'Africa/Lagos' }), 40, 48);
+  doc.text('Sales & inventory report · generated ' + new Date().toLocaleString('en-GB', { timeZone: 'Africa/Lagos' }), 40, 48);
   doc.setTextColor(20, 32, 26); doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
   doc.text(title, 40, 96);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(91, 102, 95);
