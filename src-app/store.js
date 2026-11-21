@@ -131,6 +131,7 @@ const RPC = {
   customer: (p) => sb.from('customers').upsert(p, { onConflict: 'id', ignoreDuplicates: true }),
 };
 
+const results = new Map();
 const isNetworkError = (err) => !err?.code && /fetch|network|Load failed|timeout/i.test(err?.message || String(err));
 
 export async function flushOutbox() {
@@ -152,6 +153,7 @@ export async function flushOutbox() {
         warnings.push(...res.data.oversold.map((o) => `${o.product} oversold by ${o.short_by}`));
       }
       if (op.type === 'sale' && res.data?.warning) warnings.push(res.data.warning);
+      results.set(op.id, res.data);
       state.outbox = state.outbox.filter((o) => o.id !== op.id);
       synced++;
     }
@@ -205,7 +207,7 @@ export async function recordSale(sale) {
   if (isOnline()) {
     const r = await flushOutbox();
     const still = state.outbox.find((o) => o.id === op.id);
-    return { offline: !!still && still.status === 'pending', failed: still?.status === 'failed' ? still.error : null, warnings: r.warnings || [] };
+    return { offline: !!still && still.status === 'pending', failed: still?.status === 'failed' ? still.error : null, warnings: r.warnings || [], receipt_no: results.get(op.id)?.receipt_no || null };
   }
   return { offline: true, warnings: [] };
 }

@@ -36,7 +36,8 @@ export async function renderPOS(el) {
       <div class="product-grid" id="pos-grid"></div>
     </section>
     <aside class="pos-cart card" id="pos-cart" aria-label="Current sale"></aside>
-  </div>`);
+  </div>
+  <button class="cart-jump" id="cart-jump"></button>`);
 
   const grid = el.querySelector('#pos-grid');
   const cats = el.querySelector('#pos-cats');
@@ -63,8 +64,16 @@ export async function renderPOS(el) {
     }).join('') : empty('No products match', 'Try another name or SKU.');
   };
 
+  const jump = el.querySelector('#cart-jump');
+  jump.onclick = () => cartEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver(([e]) => { jump.style.visibility = e.isIntersecting ? 'hidden' : 'visible'; });
+    io.observe(cartEl);
+  }
   const drawCart = () => {
     const t = totals();
+    jump.classList.toggle('show', t.count > 0);
+    jump.innerHTML = `<span>View sale · ${t.count} item${t.count === 1 ? '' : 's'}</span><span>${naira(t.total)}</span>`;
     const lines = [...pos.cart.entries()];
     const cust = state.customers.find((c) => c.id === pos.customer);
     const mgr = isManager();
@@ -179,7 +188,7 @@ async function complete(branch, redraw) {
   if (res.failed) { toast('The server refused this sale: ' + res.failed + '. Open the sync panel to review it.', 'danger'); }
   (res.warnings || []).forEach((w) => toast(w, 'warn'));
   const receipt = {
-    id: sale.p_id, receipt_no: null, created_at: new Date().toISOString(), branch_id: branch, cashier: state.profile?.full_name,
+    id: sale.p_id, receipt_no: res.receipt_no, created_at: new Date().toISOString(), branch_id: branch, cashier: state.profile?.full_name,
     items: items.map((i) => ({ name: i.name, qty: i.qty, unit_price: i.unit_price })), subtotal: t.sub, discount: t.disc, total: t.total,
     amount_paid: t.paid, method, customer: cust, pending: res.offline, change: t.change,
   };
