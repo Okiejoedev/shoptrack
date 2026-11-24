@@ -1,5 +1,5 @@
 import { sb, state, isOnline, stockAt, branchName } from '../store.js';
-import { esc, naira, num, icon, todayISO, monthStartISO, daysAgoISO, empty, needsOnline } from '../ui.js';
+import { esc, naira, num, icon, todayISO, monthStartISO, daysAgoISO, empty, needsOnline, fmtQty } from '../ui.js';
 import { toExcel, toPDF } from '../export.js';
 
 let tab = 'pnl';
@@ -8,7 +8,7 @@ const TABS = { pnl: 'Profit & loss', items: 'Sales by item', stock: 'Stock valua
 
 export async function renderReports(el, ctx) {
   const br = state.branch === 'all' ? null : state.branch;
-  const scope = `${r.from} to ${r.to} · ${br ? branchName(br) + ' branch' : 'All branches'}`;
+  const scope = `${r.from} to ${r.to} · All locations`;
   el.innerHTML = `<div class="toolbar wrap">
     <div class="seg" role="tablist">${Object.entries(TABS).map(([k, v]) => `<button role="tab" data-tab="${k}" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}">${v}</button>`).join('')}</div>
     <div class="grow"></div>
@@ -26,17 +26,17 @@ export async function renderReports(el, ctx) {
   if (tab === 'stock') {
     const rows = state.products.filter((p) => p.active).map((p) => {
       const q = Math.max(0, stockAt(p.id, br));
-      return { Product: p.name, SKU: p.sku, Category: p.category, Qty: q, 'Unit cost': Number(p.cost_price), 'Value at cost': q * p.cost_price, 'Value at price': q * p.sell_price };
+      return { Product: p.name, Category: p.category, 'Packs per carton': p.packs_per_carton, Stock: fmtQty(q, p.packs_per_carton), Qty: q, 'Cost per carton': Number(p.cost_price) * p.packs_per_carton, 'Unit cost': Number(p.cost_price), 'Value at cost': q * p.cost_price, 'Value at price': q * p.sell_price };
     }).sort((a, b) => b['Value at cost'] - a['Value at cost']);
     const tc = rows.reduce((a, x) => a + x['Value at cost'], 0), tp = rows.reduce((a, x) => a + x['Value at price'], 0);
     body.innerHTML = `<section class="kpis small"><div class="kpi"><div class="kpi-label">At cost</div><div class="kpi-value">${naira(tc)}</div></div>
       <div class="kpi"><div class="kpi-label">At selling price</div><div class="kpi-value">${naira(tp)}</div></div>
       <div class="kpi"><div class="kpi-label">Potential profit in stock</div><div class="kpi-value accent">${naira(tp - tc)}</div></div></section>
-      <div class="card flush"><div class="scroll"><table class="table stack"><thead><tr><th>Product</th><th>Category</th><th class="num">Qty</th><th class="num">Unit cost</th><th class="num">Value at cost</th><th class="num">Value at price</th></tr></thead>
-      <tbody>${rows.map((x) => `<tr><td><strong>${esc(x.Product)}</strong></td><td>${esc(x.Category)}</td><td class="num">${num(x.Qty)}</td><td class="num">${naira(x['Unit cost'])}</td><td class="num">${naira(x['Value at cost'])}</td><td class="num">${naira(x['Value at price'])}</td></tr>`).join('')}</tbody></table></div></div>`;
-    exp = { name: 'stock-valuation', title: 'Stock valuation', sub: `As at ${todayISO()} · ${br ? branchName(br) : 'All branches'}`, rows,
-      cols: [{ header: 'Product', key: 'Product' }, { header: 'Qty', key: 'Qty', align: 'right' }, { header: 'Unit cost', key: 'uc', align: 'right' }, { header: 'Value at cost', key: 'vc', align: 'right' }],
-      pdfRows: rows.map((x) => ({ ...x, uc: naira(x['Unit cost']), vc: naira(x['Value at cost']) })), summary: [['At cost', naira(tc)], ['At price', naira(tp)], ['Potential profit', naira(tp - tc)]] };
+      <div class="card flush"><div class="scroll"><table class="table stack"><thead><tr><th>Product</th><th>Category</th><th class="num">Stock</th><th class="num">Cost per carton</th><th class="num">Value at cost</th><th class="num">Value at price</th></tr></thead>
+      <tbody>${rows.map((x) => `<tr><td><strong>${esc(x.Product)}</strong></td><td>${esc(x.Category)}</td><td class="num">${esc(x.Stock)}</td><td class="num">${naira(x['Cost per carton'])}</td><td class="num">${naira(x['Value at cost'])}</td><td class="num">${naira(x['Value at price'])}</td></tr>`).join('')}</tbody></table></div></div>`;
+    exp = { name: 'stock-valuation', title: 'Stock valuation', sub: `As at ${todayISO()} · All locations`, rows,
+      cols: [{ header: 'Product', key: 'Product' }, { header: 'Stock', key: 'Stock', align: 'right' }, { header: 'Cost/carton', key: 'uc', align: 'right' }, { header: 'Value at cost', key: 'vc', align: 'right' }],
+      pdfRows: rows.map((x) => ({ ...x, uc: naira(x['Cost per carton']), vc: naira(x['Value at cost']) })), summary: [['At cost', naira(tc)], ['At price', naira(tp)], ['Potential profit', naira(tp - tc)]] };
   } else if (!isOnline()) {
     body.innerHTML = needsOnline('This report');
   } else if (tab === 'pnl') {
@@ -65,13 +65,13 @@ export async function renderReports(el, ctx) {
     if (error) throw error;
     if (!ctx.isCurrent()) return;
     const tot = data.reduce((a, x) => a + Number(x.revenue), 0);
-    body.innerHTML = data.length ? `<div class="card flush"><div class="scroll"><table class="table stack"><thead><tr><th>Product</th><th>Category</th><th class="num">Qty sold</th><th class="num">Revenue</th><th class="num">Share</th><th class="num">Profit</th><th class="num">Margin</th></tr></thead>
+    body.innerHTML = data.length ? `<div class="card flush"><div class="scroll"><table class="table stack"><thead><tr><th>Product</th><th>Category</th><th class="num">Packs sold</th><th class="num">Revenue</th><th class="num">Share</th><th class="num">Profit</th><th class="num">Margin</th></tr></thead>
       <tbody>${data.map((x) => `<tr><td><strong>${esc(x.name)}</strong></td><td>${esc(x.category)}</td><td class="num">${num(x.qty)}</td><td class="num">${naira(x.revenue)}</td>
       <td class="num">${tot ? ((x.revenue / tot) * 100).toFixed(1) : 0}%</td><td class="num">${naira(x.profit)}</td><td class="num">${x.revenue ? ((x.profit / x.revenue) * 100).toFixed(1) : 0}%</td></tr>`).join('')}</tbody></table></div></div>`
       : empty('No sales in this range');
-    const rows = data.map((x) => ({ Product: x.name, Category: x.category, 'Qty sold': Number(x.qty), Revenue: Number(x.revenue), Cost: Number(x.cost), Profit: Number(x.profit) }));
+    const rows = data.map((x) => ({ Product: x.name, Category: x.category, 'Packs sold': Number(x.qty), Revenue: Number(x.revenue), Cost: Number(x.cost), Profit: Number(x.profit) }));
     exp = { name: 'sales-by-item', title: 'Sales by item', sub: scope, rows,
-      cols: [{ header: 'Product', key: 'Product' }, { header: 'Qty', key: 'Qty sold', align: 'right' }, { header: 'Revenue', key: 'R', align: 'right' }, { header: 'Profit', key: 'P', align: 'right' }],
+      cols: [{ header: 'Product', key: 'Product' }, { header: 'Qty', key: 'Packs sold', align: 'right' }, { header: 'Revenue', key: 'R', align: 'right' }, { header: 'Profit', key: 'P', align: 'right' }],
       pdfRows: rows.map((x) => ({ ...x, R: naira(x.Revenue), P: naira(x.Profit) })), summary: [['Revenue', naira(tot)], ['Products sold', data.length]] };
   } else if (tab === 'staff') {
     const { data, error } = await sb.rpc('dashboard_summary', { p_from: r.from, p_to: r.to, p_branch: br });

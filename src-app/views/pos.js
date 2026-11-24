@@ -1,9 +1,13 @@
-import { state, sellBranch, stockAt, recordSale, addCustomer, isManager, isOnline, branchName } from '../store.js';
-import { esc, naira, num, icon, toast, modal, closeModal, formData, uuid, METHOD_LABEL, empty } from '../ui.js';
+import { state, sellBranch, stockAt, recordSale, addCustomer, isManager, isOnline } from '../store.js';
+import { esc, naira, icon, toast, modal, closeModal, formData, uuid, METHOD_LABEL, empty, fmtQty } from '../ui.js';
 import { showReceipt } from './receipt.js';
 
+// cart key = productId|unit  (unit: 'pack' or 'carton')
 const pos = { cart: new Map(), discount: '', discountPct: false, customer: '', method: 'cash', paid: '', q: '', cat: 'All' };
 const CASHIER_MAX_DISCOUNT = 0.1;
+
+export const cartonPrice = (p) => Number(p.carton_price) > 0 ? Number(p.carton_price) : Number(p.sell_price) * p.packs_per_carton;
+const packsOf = (l) => l.qty * (l.unit === 'carton' ? l.ppc : 1);
 
 function totals() {
   let sub = 0, count = 0;
@@ -20,24 +24,25 @@ function totals() {
   return { sub, disc, total, paid, count, change: tendered != null ? Math.max(0, tendered - total) : 0, tendered };
 }
 
+function packsInCart(pid) {
+  let n = 0; pos.cart.forEach((l, k) => { if (k.startsWith(pid + '|')) n += packsOf(l); }); return n;
+}
+
 export async function renderPOS(el) {
   const branch = sellBranch();
-  if (state.branch === 'all') {
-    el.innerHTML = `<div class="alert info">Selling at <strong>${esc(branchName(branch))}</strong>. Pick a branch at the top to sell somewhere else.</div>`;
-  } else el.innerHTML = '';
-  el.insertAdjacentHTML('beforeend', `
+  el.innerHTML = `
   <div class="pos">
     <section class="pos-products">
       <div class="pos-search">
         <label class="search">${icon.search}<span class="sr-only">Search products</span>
-          <input id="pos-q" placeholder="Search by name, or scan / type a SKU and press Enter" value="${esc(pos.q)}" autocomplete="off"></label>
+          <input id="pos-q" placeholder="Search products" value="${esc(pos.q)}" autocomplete="off"></label>
       </div>
       <div class="chips" id="pos-cats"></div>
       <div class="product-grid" id="pos-grid"></div>
     </section>
     <aside class="pos-cart card" id="pos-cart" aria-label="Current sale"></aside>
   </div>
-  <button class="cart-jump" id="cart-jump"></button>`);
+  <button class="cart-jump" id="cart-jump"></button>`;
 
   const grid = el.querySelector('#pos-grid');
   const cats = el.querySelector('#pos-cats');
@@ -45,7 +50,7 @@ export async function renderPOS(el) {
   const active = () => state.products.filter((p) => p.active);
 
   const drawCats = () => {
-    const list = ['All', ...new Set(active().map((p) => p.category || 'General'))];
+    const list = ['All', ...[...new Set(active().map((p) => p.category || 'General'))].sort()];
     cats.innerHTML = list.map((c) => `<button class="chip ${c === pos.cat ? 'on' : ''}" data-cat="${esc(c)}" aria-pressed="${c === pos.cat}">${esc(c)}</button>`).join('');
   };
   const drawGrid = () => {
@@ -53,15 +58,21 @@ export async function renderPOS(el) {
     const items = active().filter((p) => (pos.cat === 'All' || (p.category || 'General') === pos.cat)
       && (!q || p.name.toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q)));
     grid.innerHTML = items.length ? items.map((p) => {
-      const s = stockAt(p.id, branch);
-      const inCart = pos.cart.get(p.id)?.qty || 0;
-      const low = s <= p.reorder_level;
-      return `<button class="product ${inCart ? 'in-cart' : ''} ${s <= 0 ? 'out' : ''}" data-add="${p.id}">
+      const s = stockAt(p.id, branch) - packsInCart(p.id);
+      const priced = Number(p.sell_price) > 0;
+      const hasCarton = p.packs_per_carton > 1;
+      const inCart = packsInCart(p.id);
+      return `<div class="product ${inCart ? 'in-cart' : ''} ${s <= 0 ? 'out' : ''}">
+        ${p.image_url ? `<img class="p-img" src="${esc(p.image_url)}" alt="" loading="lazy">` : ''}
         <span class="p-name">${esc(p.name)}</span>
-        <span class="p-price">${naira(p.sell_price)}</span>
-        <span class="p-stock ${low ? 'low' : ''}">${s <= 0 ? 'Out of stock' : `${num(s)} in stock`}</span>
-        ${inCart ? `<span class="p-badge">${inCart}</span>` : ''}</button>`;
-    }).join('') : empty('No products match', 'Try another name or SKU.');
+        <span class="p-stock ${s <= p.reorder_level ? 'low' : ''}">${s <= 0 ? 'None in store' : fmtQty(s, p.packs_per_carton) + ' in store'}</span>
+        ${priced ? `<div class="p-buy">
+          <button data-add="${p.id}" data-unit="pack" aria-label="Add one pack of ${esc(p.name)}"><span>+ Pack</span><strong>${naira(p.sell_price)}</strong></button>
+          ${hasCarton ? `<button data-add="${p.id}" data-unit="carton" aria-label="Add one carton of ${esc(p.name)}"><span>+ Carton (${p.packs_per_carton})</span><strong>${naira(cartonPrice(p))}</strong></button>` : ''}
+        </div>` : `<div class="p-noprice">Price not set yet${isManager() ? ` · <a href="#/products">set it</a>` : ''}</div>`}
+        ${inCart ? `<span class="p-badge">${fmtQty(inCart, p.packs_per_carton)}</span>` : ''}
+      </div>`;
+    }).join('') : empty('No products match', 'Try another name.');
   };
 
   const jump = el.querySelector('#cart-jump');
@@ -70,10 +81,11 @@ export async function renderPOS(el) {
     const io = new IntersectionObserver(([e]) => { jump.style.visibility = e.isIntersecting ? 'hidden' : 'visible'; });
     io.observe(cartEl);
   }
+
   const drawCart = () => {
     const t = totals();
     jump.classList.toggle('show', t.count > 0);
-    jump.innerHTML = `<span>View sale · ${t.count} item${t.count === 1 ? '' : 's'}</span><span>${naira(t.total)}</span>`;
+    jump.innerHTML = `<span>View sale · ${pos.cart.size} line${pos.cart.size === 1 ? '' : 's'}</span><span>${naira(t.total)}</span>`;
     const lines = [...pos.cart.entries()];
     const cust = state.customers.find((c) => c.id === pos.customer);
     const mgr = isManager();
@@ -86,22 +98,23 @@ export async function renderPOS(el) {
           </select></label>
         <button class="btn ghost small add-cust" id="cart-newcust">${icon.plus}<span>New</span></button>
       </div>
-      <div class="cart-lines">${lines.length ? lines.map(([id, l]) => {
-        const s = stockAt(id, branch);
+      <div class="cart-lines">${lines.length ? lines.map(([key, l]) => {
+        const over = packsInCart(l.pid) > stockAt(l.pid, branch);
         return `<div class="cart-line">
           <div class="cl-info"><div class="cl-name">${esc(l.name)}</div>
-            <div class="muted small">${mgr ? `<label class="inline-price">@ ₦<input type="number" min="0" step="any" value="${l.price}" data-price="${id}" aria-label="Price for ${esc(l.name)}"></label>` : '@ ' + naira(l.price)}
-            ${l.qty > s ? ` · <span class="text-danger">only ${Math.max(0, s)} in stock</span>` : ''}</div></div>
+            <div class="muted small"><span class="unit-tag ${l.unit}">${l.unit === 'carton' ? `Carton of ${l.ppc}` : 'Pack'}</span>
+            ${mgr ? `<label class="inline-price">@ ₦<input type="number" min="0" step="any" value="${l.price}" data-price="${key}" aria-label="Price for ${esc(l.name)}"></label>` : '@ ' + naira(l.price)}
+            ${over ? ' · <span class="text-danger">more than in store</span>' : ''}</div></div>
           <div class="qty">
-            <button class="icon-btn small" data-dec="${id}" aria-label="One less ${esc(l.name)}">${icon.minus}</button>
-            <input type="number" min="1" value="${l.qty}" data-qty="${id}" aria-label="Quantity of ${esc(l.name)}">
-            <button class="icon-btn small" data-inc="${id}" aria-label="One more ${esc(l.name)}">${icon.plus}</button>
+            <button class="icon-btn small" data-dec="${key}" aria-label="One less">${icon.minus}</button>
+            <input type="number" min="1" value="${l.qty}" data-qty="${key}" aria-label="Quantity of ${esc(l.name)}">
+            <button class="icon-btn small" data-inc="${key}" aria-label="One more">${icon.plus}</button>
           </div>
           <div class="cl-total">${naira(l.qty * l.price)}</div>
         </div>`;
-      }).join('') : `<div class="cart-empty">Tap a product to add it.<br><span class="muted small">Scanners that type the SKU work in the search box.</span></div>`}</div>
+      }).join('') : `<div class="cart-empty">Tap <strong>+ Pack</strong> or <strong>+ Carton</strong> on a product to add it.</div>`}</div>
       <div class="cart-foot">
-        <div class="row between"><span class="muted">Subtotal · ${t.count} item${t.count === 1 ? '' : 's'}</span><span>${naira(t.sub)}</span></div>
+        <div class="row between"><span class="muted">Subtotal</span><span>${naira(t.sub)}</span></div>
         <div class="row between discount-row">
           <label class="row gap-s">Discount
             <input type="number" min="0" step="any" id="cart-disc" value="${esc(pos.discount)}" placeholder="0" aria-label="Discount">
@@ -123,11 +136,12 @@ export async function renderPOS(el) {
       </div>`;
   };
 
-  const add = (id, n = 1) => {
-    const p = state.products.find((x) => x.id === id); if (!p) return;
-    const l = pos.cart.get(id) || { name: p.name, qty: 0, price: Number(p.sell_price) };
+  const add = (pid, unit, n = 1) => {
+    const p = state.products.find((x) => x.id === pid); if (!p) return;
+    const key = pid + '|' + unit;
+    const l = pos.cart.get(key) || { pid, unit, name: p.name, qty: 0, ppc: p.packs_per_carton, price: unit === 'carton' ? cartonPrice(p) : Number(p.sell_price) };
     l.qty += n;
-    if (l.qty <= 0) pos.cart.delete(id); else pos.cart.set(id, l);
+    if (l.qty <= 0) pos.cart.delete(key); else pos.cart.set(key, l);
     drawGrid(); drawCart();
   };
 
@@ -135,20 +149,14 @@ export async function renderPOS(el) {
 
   const q = el.querySelector('#pos-q');
   q.addEventListener('input', () => { pos.q = q.value; drawGrid(); });
-  q.addEventListener('keydown', (e) => {
-    if (e.key !== 'Enter') return;
-    const v = q.value.trim().toLowerCase();
-    const hit = state.products.find((p) => p.active && (p.sku || '').toLowerCase() === v)
-      || (() => { const m = state.products.filter((p) => p.active && p.name.toLowerCase().includes(v)); return m.length === 1 ? m[0] : null; })();
-    if (hit) { add(hit.id); q.value = ''; pos.q = ''; drawGrid(); toast(`Added ${hit.name}`); }
-  });
   cats.addEventListener('click', (e) => { const b = e.target.closest('[data-cat]'); if (b) { pos.cat = b.dataset.cat; drawCats(); drawGrid(); } });
-  grid.addEventListener('click', (e) => { const b = e.target.closest('[data-add]'); if (b) add(b.dataset.add); });
+  grid.addEventListener('click', (e) => { const b = e.target.closest('[data-add]'); if (b) add(b.dataset.add, b.dataset.unit); });
 
   cartEl.addEventListener('click', async (e) => {
     const t = e.target;
-    if (t.closest('[data-inc]')) add(t.closest('[data-inc]').dataset.inc, 1);
-    if (t.closest('[data-dec]')) add(t.closest('[data-dec]').dataset.dec, -1);
+    const inc = t.closest('[data-inc]'), dec = t.closest('[data-dec]');
+    if (inc) { const l = pos.cart.get(inc.dataset.inc); add(l.pid, l.unit, 1); }
+    if (dec) { const l = pos.cart.get(dec.dataset.dec); add(l.pid, l.unit, -1); }
     if (t.closest('#cart-clear')) { reset(); drawGrid(); drawCart(); }
     if (t.closest('#disc-mode')) { pos.discountPct = !pos.discountPct; drawCart(); }
     if (t.closest('[data-method]')) { pos.method = t.closest('[data-method]').dataset.method; pos.paid = ''; drawCart(); }
@@ -163,7 +171,6 @@ export async function renderPOS(el) {
     if (t.id === 'cart-disc') { pos.discount = t.value; drawCart(); }
     if (t.id === 'cart-paid') { pos.paid = t.value; drawCart(); }
   });
-  setTimeout(() => q.focus(), 50);
 }
 
 function reset() { pos.cart.clear(); pos.discount = ''; pos.customer = ''; pos.method = 'cash'; pos.paid = ''; }
@@ -176,21 +183,21 @@ async function complete(branch, redraw) {
   if (pos.method === 'cash' && t.tendered != null && t.tendered < t.total) { toast('Cash received is less than the total.', 'warn'); return; }
   if (!isManager() && t.disc > t.sub * CASHIER_MAX_DISCOUNT + 0.01) { toast(`Cashiers can give up to ${CASHIER_MAX_DISCOUNT * 100}% discount. Ask a manager.`, 'warn'); return; }
 
-  const items = [...pos.cart.entries()].map(([id, l]) => ({ product_id: id, qty: l.qty, unit_price: l.price, name: l.name }));
+  const lines = [...pos.cart.values()];
   const method = pos.method === 'split' && t.paid >= t.total ? 'cash' : pos.method;
   const sale = {
     p_id: uuid(), p_branch: branch, p_method: method, p_amount_paid: t.paid, p_discount: t.disc, p_customer: cust?.id || null,
-    p_items: items.map(({ product_id, qty, unit_price }) => ({ product_id, qty, unit_price })),
-    meta: { total: t.total, totalText: naira(t.total), items, customer: cust?.name || null, subtotal: t.sub, discount: t.disc, method, paid: t.paid },
+    p_items: lines.map((l) => ({ product_id: l.pid, unit: l.unit, qty: l.qty, unit_price: l.price, packs: packsOf(l) })),
+    meta: { total: t.total, totalText: naira(t.total), items: lines.map((l) => ({ name: `${l.name} (${l.unit})`, qty: l.qty })), customer: cust?.name || null },
   };
   const btn = document.getElementById('cart-pay'); if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   const res = await recordSale(sale);
-  if (res.failed) { toast('The server refused this sale: ' + res.failed + '. Open the sync panel to review it.', 'danger'); }
+  if (res.failed) toast('The server refused this sale: ' + res.failed + '. Open the sync panel to review it.', 'danger');
   (res.warnings || []).forEach((w) => toast(w, 'warn'));
   const receipt = {
     id: sale.p_id, receipt_no: res.receipt_no, created_at: new Date().toISOString(), branch_id: branch, cashier: state.profile?.full_name,
-    items: items.map((i) => ({ name: i.name, qty: i.qty, unit_price: i.unit_price })), subtotal: t.sub, discount: t.disc, total: t.total,
-    amount_paid: t.paid, method, customer: cust, pending: res.offline, change: t.change,
+    items: lines.map((l) => ({ name: l.unit === 'carton' ? `${l.name} (carton of ${l.ppc})` : `${l.name} (pack)`, qty: l.qty, unit_price: l.price })),
+    subtotal: t.sub, discount: t.disc, total: t.total, amount_paid: t.paid, method, customer: cust, pending: res.offline, change: t.change,
   };
   reset(); redraw();
   showReceipt(receipt, { onNew: () => document.getElementById('pos-q')?.focus() });

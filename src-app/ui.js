@@ -65,6 +65,11 @@ export const icon = {
   sparkle: I('<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/>'),
   trash: I('<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>'),
   check: I('<path d="M20 6L9 17l-5-5"/>'),
+  tag: I('<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/>'),
+  bank: I('<path d="M3 10h18L12 4 3 10z"/><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18"/>'),
+  porter: I('<path d="M4 4h3l3 12h8"/><circle cx="10" cy="19" r="2"/><circle cx="18" cy="19" r="2"/><rect x="11" y="7" width="7" height="6" rx="1"/>'),
+  supplier: I('<path d="M3 21V9l9-5 9 5v12"/><path d="M9 21v-6h6v6"/>'),
+  image: I('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/>'),
   alert: I('<path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 18h.01"/>'),
 };
 
@@ -133,3 +138,16 @@ export function waLink(phone, text) {
 }
 
 export function debounce(fn, ms = 200) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+
+// Stock is kept in packs. Show it as cartons + packs.
+export function fmtQty(packs, ppc = 1, cartonsOnly = false) {
+  const n = Number(packs || 0); const per = Math.max(1, Number(ppc || 1));
+  if (per === 1) return `${num(n)} pk`;
+  const neg = n < 0; const a = Math.abs(n);
+  const c = Math.floor(a / per), p = a % per;
+  if (cartonsOnly) return `${neg ? '−' : ''}${num(c)} ctn${p ? ` + ${p} pk` : ''}`;
+  const parts = [];
+  if (c) parts.push(`${num(c)} ctn`);
+  if (p || !c) parts.push(`${p} pk`);
+  return (neg ? '−' : '') + parts.join(' + ');
+}

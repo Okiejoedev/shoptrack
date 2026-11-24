@@ -1,5 +1,5 @@
 import { sb, state, isOnline, isManager, cachePut, cacheGet, branchName } from '../store.js';
-import { esc, naira, short, num, todayISO, daysAgoISO, monthStartISO, icon, fmtDateTime, METHOD_LABEL, empty } from '../ui.js';
+import { esc, naira, short, num, todayISO, daysAgoISO, monthStartISO, icon, fmtDateTime, METHOD_LABEL, empty, fmtQty } from '../ui.js';
 
 let period = '7d';
 const PERIODS = { today: 'Today', '7d': 'Last 7 days', '30d': 'Last 30 days', month: 'This month' };
@@ -40,7 +40,7 @@ export async function renderDashboard(el, ctx) {
   const head = `<div class="toolbar">
     <div class="seg" role="group" aria-label="Period">${Object.entries(PERIODS).map(([k, v]) =>
       `<button class="${k === period ? 'on' : ''}" data-period="${k}" aria-pressed="${k === period}">${v}</button>`).join('')}</div>
-    <div class="muted small">${esc(state.branch === 'all' ? 'All branches' : branchName(state.branch))}</div>
+
     <div class="grow"></div>
     <a class="btn primary" href="#/pos">${icon.plus}<span>Record a sale</span></a></div>
     ${stale ? `<div class="alert warn">${icon.wifiOff}<span>You're offline. These figures were last updated ${fmtDateTime(stale)}.</span></div>` : ''}`;
@@ -65,7 +65,7 @@ export async function renderDashboard(el, ctx) {
   const margin = d.revenue ? (Number(d.profit) / Number(d.revenue)) * 100 : 0;
 
   const insights = [];
-  if (reorder?.[0]?.days_left != null) insights.push(`<strong>${esc(reorder[0].name)}</strong> runs out in about ${reorder[0].days_left} days at the current pace. Order ${reorder[0].suggested_qty} ${esc(reorder[0].unit)}s.`);
+  if (reorder?.[0]?.days_left != null) insights.push(`<strong>${esc(reorder[0].name)}</strong> runs out in about ${reorder[0].days_left} days at the current pace. Order ${reorder[0].suggested_cartons} carton${reorder[0].suggested_cartons === 1 ? '' : 's'}.`);
   if (busiest?.v) insights.push(`Your busiest hour is <strong>${busiest.h}:00–${busiest.h + 1}:00</strong>. Keep your best cashier on the till then.`);
   if (Number(d.receivables) > 0) insights.push(`Customers owe you <strong>${naira(d.receivables)}</strong>. Send WhatsApp reminders from Customers.`);
   if (mgr && d.prev_profit && Number(d.profit) < Number(d.prev_profit)) insights.push(`Profit is down on the previous period. Check discounts (${naira(d.discounts)}) and the price margins in Inventory.`);
@@ -74,10 +74,12 @@ export async function renderDashboard(el, ctx) {
   <section class="kpis">
     <div class="kpi"><div class="kpi-label">Revenue</div><div class="kpi-value">${naira(d.revenue)}</div><div>${delta(Number(d.revenue), Number(d.prev_revenue))}</div></div>
     ${mgr ? `<div class="kpi"><div class="kpi-label">Gross profit</div><div class="kpi-value accent">${naira(d.profit)}</div><div class="muted small">${margin.toFixed(1)}% margin · ${delta(Number(d.profit), Number(d.prev_profit))}</div></div>
-    <div class="kpi"><div class="kpi-label">Net profit after expenses</div><div class="kpi-value">${naira(d.net_profit)}</div><div class="muted small">Expenses ${naira(d.expenses)}</div></div>` : ''}
+    <div class="kpi"><div class="kpi-label">Net profit after expenses</div><div class="kpi-value">${naira(d.net_profit)}</div><div class="muted small">Expenses ${naira(d.expenses)} · porter ${naira(d.porter)}</div></div>
+    <div class="kpi"><div class="kpi-label">Money in the bank</div><div class="kpi-value accent">${naira(d.bank_total)}</div><div class="small"><a href="#/bank">Bank accounts</a></div></div>
+    <div class="kpi"><div class="kpi-label">You owe suppliers</div><div class="kpi-value warn-text">${naira(d.payables)}</div><div class="small"><a href="#/suppliers">Suppliers</a></div></div>` : ''}
     <div class="kpi"><div class="kpi-label">Transactions</div><div class="kpi-value">${num(d.transactions)}</div><div class="muted small">Avg basket ${naira(d.avg_basket)} · ${num(d.items)} items</div></div>
     <div class="kpi"><div class="kpi-label">Owed by customers</div><div class="kpi-value">${naira(d.receivables)}</div><div class="muted small">${naira(d.credit_given)} credit given this period</div></div>
-    ${mgr ? `<div class="kpi"><div class="kpi-label">Stock value (at cost)</div><div class="kpi-value">${naira(d.stock_value)}</div><div class="muted small">${lowCount} item${lowCount === 1 ? '' : 's'} at or below reorder level</div></div>` : ''}
+    ${mgr ? `<div class="kpi"><div class="kpi-label">Stock value (at cost)</div><div class="kpi-value">${naira(d.stock_value)}</div><div class="muted small">Warehouses + store</div></div>` : ''}
   </section>
 
   ${insights.length ? `<section class="card insights"><div class="card-title">${icon.sparkle}<span>What needs your attention</span></div>
@@ -133,12 +135,12 @@ export async function renderDashboard(el, ctx) {
     <section class="card span-2">
       <div class="card-head"><h2>Smart reorder suggestions</h2><span class="muted small">Based on the last 14 days of sales</span>
         ${mgr && reorder?.length ? `<a class="btn small primary" href="#/purchasing?from=reorder">Create purchase order</a>` : ''}</div>
-      ${reorder?.length ? `<div class="scroll"><table class="table stack"><thead><tr><th>Product</th><th class="num">In stock</th><th class="num">Sells per day</th><th class="num">Days left</th><th class="num">Order</th>${mgr ? '<th class="num">Est. cost</th>' : ''}</tr></thead>
+      ${reorder?.length ? `<div class="scroll"><table class="table stack"><thead><tr><th>Product</th><th class="num">In stock (all)</th><th class="num">Packs sold per day</th><th class="num">Days left</th><th class="num">Order</th>${mgr ? '<th class="num">Est. cost</th>' : ''}</tr></thead>
       <tbody>${reorder.slice(0, 8).map((r) => `<tr>
         <td><strong>${esc(r.name)}</strong> <span class="muted small">${esc(r.sku || '')}</span></td>
-        <td class="num">${num(r.stock)}</td><td class="num">${r.daily_sales}</td>
+        <td class="num">${fmtQty(r.stock, r.packs_per_carton)}</td><td class="num">${r.daily_sales}</td>
         <td class="num">${r.days_left == null ? '—' : `<span class="pill ${r.days_left < 5 ? 'danger' : 'warn'}">${r.days_left} days</span>`}</td>
-        <td class="num"><strong>${num(r.suggested_qty)}</strong> ${esc(r.unit)}s</td>${mgr ? `<td class="num">${naira(r.est_cost)}</td>` : ''}</tr>`).join('')}</tbody></table></div>`
+        <td class="num"><strong>${num(r.suggested_cartons)}</strong> ctn</td>${mgr ? `<td class="num">${naira(r.est_cost)}</td>` : ''}</tr>`).join('')}</tbody></table></div>`
         : empty('Stock levels look healthy', 'Nothing is close to running out.')}
     </section>
   </div>`;

@@ -44,7 +44,7 @@ export async function renderSales(el, ctx) {
   </div>
   <div class="summary-line"><strong>${live.length}</strong> sales · <strong>${naira(tot)}</strong>${mgr ? ` · profit <strong>${naira(live.reduce((a, s) => a + Number(s.profit), 0))}</strong>` : ''}${data.length >= 500 ? ' · showing the latest 500' : ''}</div>
   <div class="card flush"><div class="scroll"><table class="table stack clickable">
-    <thead><tr><th>Receipt</th><th>Date</th><th>Branch</th><th>Customer</th><th>Cashier</th><th>Method</th><th>Status</th><th class="num">Total</th>${mgr ? '<th class="num">Profit</th>' : ''}</tr></thead>
+    <thead><tr><th>Receipt</th><th>Date</th><th>Location</th><th>Customer</th><th>Cashier</th><th>Method</th><th>Status</th><th class="num">Total</th>${mgr ? '<th class="num">Profit</th>' : ''}</tr></thead>
     <tbody>${list.length ? list.map((s) => `<tr data-sale="${s.id}" tabindex="0">
       <td><strong>#${s.receipt_no}</strong>${s.recorded_offline ? ' <span class="pill small" title="Recorded while offline">offline</span>' : ''}</td>
       <td>${fmtDateTime(s.created_at)}</td><td>${esc(branchName(s.branch_id))}</td><td>${esc(s.customers?.name || 'Walk-in')}</td><td>${esc(s.profiles?.full_name || '')}</td>
@@ -76,7 +76,7 @@ export async function renderSales(el, ctx) {
 async function openSale(s, ctx) {
   const { data: items } = await sb.from('sale_items').select('*').eq('sale_id', s.id);
   const r = { id: s.id, receipt_no: s.receipt_no, created_at: s.created_at, branch_id: s.branch_id, cashier: s.profiles?.full_name,
-    items: (items || []).map((i) => ({ name: i.product_name, qty: i.qty, unit_price: Number(i.unit_price) })),
+    items: (items || []).map((i) => ({ name: `${i.product_name} (${i.sold_unit || 'pack'})`, qty: i.sold_qty ?? i.qty, unit_price: Number(i.sold_unit_price ?? i.unit_price) })),
     subtotal: Number(s.subtotal), discount: Number(s.discount), total: Number(s.total), amount_paid: Number(s.amount_paid), method: s.payment_method,
     customer: s.customers ? { name: s.customers.name, phone: s.customers.phone } : null, status: s.status };
   showReceipt(r);

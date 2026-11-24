@@ -298,3 +298,48 @@ fieldset { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14p
   #receipt-print { position: absolute; left: 0; top: 0; border: 0; width: 72mm; max-width: none; padding: 0; }
   .modal-backdrop { background: none; position: static; }
 }
+
+/* ---------- packs & cartons, product admin, bank ---------- */
+.product { cursor: default; }
+.p-img { width: 100%; height: 96px; object-fit: contain; border-radius: 8px; background: #F6F7F4; margin-bottom: 4px; }
+.p-buy { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
+.p-buy button { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; border: 1px solid #BFDDCF; background: var(--accent-soft); color: var(--ink);
+  border-radius: 10px; padding: 7px 9px; cursor: pointer; min-height: 48px; text-align: left; }
+.p-buy button span { font-size: 11px; font-weight: 600; color: var(--ok); }
+.p-buy button strong { font: 700 14px var(--display); }
+.p-buy button:hover { background: #D3EDE1; border-color: var(--accent); }
+.p-noprice { margin-top: 8px; font-size: 12px; color: var(--warn); background: var(--warn-soft); border-radius: 8px; padding: 6px 8px; }
+.product .p-badge { width: auto; }
+.unit-tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: #EDF0EC; color: #3A463F; margin-right: 4px; }
+.unit-tag.carton { background: #E8EEF9; color: #23417A; }
+.thumb { width: 36px; height: 36px; object-fit: contain; border-radius: 6px; background: #F6F7F4; flex: none; }
+.product-admin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.pa-card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 12px; align-items: start; box-shadow: var(--shadow); }
+.pa-card > .btn { grid-column: 1 / -1; justify-self: end; }
+.pa-card.archived { opacity: .6; }
+.pa-img { width: 76px; height: 76px; border-radius: 10px; background: #F6F7F4; display: grid; place-items: center; overflow: hidden; }
+.pa-img img { width: 100%; height: 100%; object-fit: contain; }
+.pa-noimg { display: flex; flex-direction: column; align-items: center; font-size: 10px; color: var(--muted); gap: 2px; }
+.pa-info { display: flex; flex-direction: column; gap: 3px; }
+.img-pick { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.img-preview { width: 88px; height: 88px; border-radius: 12px; border: 1px dashed #C8CFC9; display: grid; place-items: center; overflow: hidden; color: var(--muted); background: #FAFBF9; }
+.img-preview img { width: 100%; height: 100%; object-fit: contain; }
+.file-btn { flex-direction: row; color: var(--ink); cursor: pointer; }
+.price-table input { width: 120px; min-height: 36px; text-align: right; font-size: 15px; }
+.price-table td { padding: 6px 10px; }
+.sticky-save { position: sticky; bottom: 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 4px; background: linear-gradient(transparent, var(--bg) 30%); flex-wrap: wrap; }
+.po-head.po5, #po-lines .po-line { grid-template-columns: minmax(0, 3fr) 80px 110px 120px 34px; }
+.big-kpi .kpi-value { font-size: clamp(24px, 3vw, 32px); }
+.bank-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.bank-card { text-align: left; background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; cursor: pointer; box-shadow: var(--shadow); }
+.bank-card.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+.bc-name { font-weight: 700; } .bc-bal { font: 700 22px var(--display); margin-top: 6px; }
+.toolbar h2 { margin: 0; }
+@media (max-width: 640px) {
+  #po-lines .po-line { grid-template-columns: 1fr 64px 90px; }
+  #po-lines .po-line input[name=cost] { grid-column: 1 / 3; }
+  .po-head.po5 { display: none; }
+  .p-img { height: 72px; }
+  .price-table input { width: 92px; }
+}
+.toolbar select { width: auto; min-width: 150px; }

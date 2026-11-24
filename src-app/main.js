@@ -12,14 +12,22 @@ import { renderExpenses } from './views/expenses.js';
 import { renderReports } from './views/reports.js';
 import { renderStaff } from './views/staff.js';
 import { renderSettings } from './views/settings.js';
+import { renderProducts } from './views/products.js';
+import { renderSuppliers } from './views/suppliers.js';
+import { renderPorter } from './views/porter.js';
+import { renderBank } from './views/bank.js';
 
 const ROUTES = [
   { key: 'dashboard', label: 'Dashboard', icon: icon.dashboard, view: renderDashboard, roles: ['owner', 'manager', 'cashier'] },
   { key: 'pos', label: 'Record sale', icon: icon.pos, view: renderPOS, roles: ['owner', 'manager', 'cashier'] },
   { key: 'sales', label: 'Sales', icon: icon.sales, view: renderSales, roles: ['owner', 'manager', 'cashier'] },
   { key: 'inventory', label: 'Inventory', icon: icon.inventory, view: renderInventory, roles: ['owner', 'manager', 'cashier'] },
+  { key: 'products', label: 'Products (admin)', icon: icon.tag, view: renderProducts, roles: ['owner', 'manager'] },
   { key: 'customers', label: 'Customers', icon: icon.customers, view: renderCustomers, roles: ['owner', 'manager', 'cashier'] },
-  { key: 'purchasing', label: 'Purchasing', icon: icon.purchasing, view: renderPurchasing, roles: ['owner', 'manager'] },
+  { key: 'suppliers', label: 'Suppliers', icon: icon.supplier, view: renderSuppliers, roles: ['owner', 'manager'] },
+  { key: 'purchasing', label: 'Purchase orders', icon: icon.purchasing, view: renderPurchasing, roles: ['owner', 'manager'] },
+  { key: 'porter', label: 'Market porter', icon: icon.porter, view: renderPorter, roles: ['owner', 'manager'] },
+  { key: 'bank', label: 'Bank accounts', icon: icon.bank, view: renderBank, roles: ['owner', 'manager'] },
   { key: 'expenses', label: 'Expenses', icon: icon.expenses, view: renderExpenses, roles: ['owner', 'manager'] },
   { key: 'reports', label: 'Reports', icon: icon.reports, view: renderReports, roles: ['owner', 'manager'] },
   { key: 'staff', label: 'Staff & roles', icon: icon.staff, view: renderStaff, roles: ['owner'] },
@@ -54,7 +62,7 @@ function renderLogin(err = '') {
       <p class="login-tag">Sales, stock and money for Nigerian shops: on the counter, in the store room and on the owner's phone. Even when the network is gone.</p>
       <div class="login-stats">
         <div><strong>Point of sale</strong><span>Works offline</span></div>
-        <div><strong>Multi-branch</strong><span>Stock per shop</span></div>
+        <div><strong>Warehouses &amp; store</strong><span>Cartons and packs</span></div>
         <div><strong>Debtors</strong><span>Credit &amp; part-pay</span></div>
         <div><strong>Reports</strong><span>P&amp;L, Excel, PDF</span></div>
       </div>
@@ -69,8 +77,8 @@ function renderLogin(err = '') {
       <div class="demo-box">
         <div class="demo-title">Demo accounts</div>
         <button type="button" class="demo-btn" data-demo="owner@example.com|ShopTrack2026!"><strong>Owner</strong><span>Bisi Adeyemi · everything</span></button>
-        <button type="button" class="demo-btn" data-demo="manager@example.com|Manager2026!"><strong>Manager</strong><span>Chioma Okafor · Ikeja</span></button>
-        <button type="button" class="demo-btn" data-demo="staff@example.com|Staff2026!"><strong>Cashier</strong><span>Tunde Bello · Ikeja till</span></button>
+        <button type="button" class="demo-btn" data-demo="manager@example.com|Manager2026!"><strong>Manager</strong><span>Chioma Okafor · all locations</span></button>
+        <button type="button" class="demo-btn" data-demo="staff@example.com|Staff2026!"><strong>Cashier</strong><span>Tunde Bello · Store till</span></button>
       </div>
       <p class="tiny muted">Built by Chada Digital</p>
     </form>
@@ -107,14 +115,7 @@ function syncPill() {
   return `<button class="sync-pill on" id="sync-pill">${icon.wifi}<span>Synced${state.lastSync ? ' ' + fmtTime(state.lastSync) : ''}</span></button>`;
 }
 
-function branchPicker() {
-  if (role() === 'cashier') return `<div class="branch-fixed">${esc(branchName(state.profile?.branch_id))} branch</div>`;
-  return `<label class="branch-select"><span class="sr-only">Branch</span>
-    <select id="branch-select">
-      <option value="all" ${state.branch === 'all' ? 'selected' : ''}>All branches</option>
-      ${state.branches.map((b) => `<option value="${b.id}" ${state.branch === b.id ? 'selected' : ''}>${esc(b.name)}</option>`).join('')}
-    </select></label>`;
-}
+function branchPicker() { return ''; }
 
 function renderShell() {
   const r = route();
@@ -162,7 +163,6 @@ function renderShell() {
     state.session = null; state.profile = null;
     renderLogin();
   };
-  document.getElementById('branch-select')?.addEventListener('change', (e) => { setBranch(e.target.value); renderView(); });
   document.getElementById('offline-toggle').addEventListener('change', (e) => {
     setForceOffline(e.target.checked);
     toast(e.target.checked ? 'Offline mode: keep selling, everything saves on this device.' : 'Back online, syncing now…', e.target.checked ? 'warn' : 'info');

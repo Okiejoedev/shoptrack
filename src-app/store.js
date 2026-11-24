@@ -32,7 +32,11 @@ export const isManager = () => ['owner', 'manager'].includes(role());
 export const isOwner = () => role() === 'owner';
 export const isOnline = () => navigator.onLine && !state.forceOffline;
 export const branchName = (id) => state.branches.find((b) => b.id === id)?.name || '—';
-export const sellBranch = () => (state.branch && state.branch !== 'all' ? state.branch : state.profile?.branch_id || state.branches[0]?.id);
+export const storeId = () => state.branches.find((b) => b.kind === 'store')?.id || state.branches[0]?.id;
+export const warehouses = () => state.branches.filter((b) => b.kind === 'warehouse');
+export const isWarehouse = (id) => state.branches.find((b) => b.id === id)?.kind === 'warehouse';
+export const sellBranch = () => storeId();
+export const product = (id) => state.products.find((p) => p.id === id);
 export const stockAt = (pid, bid) => {
   const l = state.levels[pid] || {};
   if (!bid || bid === 'all') return Object.values(l).reduce((a, b) => a + b, 0);
@@ -88,7 +92,7 @@ export async function refreshCore() {
   // keep local deductions for sales that are still waiting in the outbox
   state.outbox.filter((o) => o.type === 'sale').forEach((o) => {
     o.payload.p_items.forEach((it) => {
-      (lv[it.product_id] ||= {})[o.payload.p_branch] = (lv[it.product_id][o.payload.p_branch] || 0) - it.qty;
+      (lv[it.product_id] ||= {})[o.payload.p_branch] = (lv[it.product_id][o.payload.p_branch] || 0) - (it.packs ?? it.qty);
     });
   });
   state.outbox.filter((o) => o.type === 'restock').forEach((o) => {
@@ -106,10 +110,7 @@ export async function refreshCore() {
       const c = state.customers.find((x) => x.id === o.payload.p_customer); if (c && unpaid > 0) c.balance = Number(c.balance) + unpaid;
     }
   });
-  if (!state.branch || (state.branch !== 'all' && !state.branches.find((b) => b.id === state.branch))) {
-    state.branch = state.profile.role === 'cashier' ? state.profile.branch_id : (state.profile.branch_id || 'all');
-  }
-  if (state.profile.role === 'cashier') state.branch = state.profile.branch_id;
+  state.branch = 'all';   // one selling point (the Store); locations are shown side by side
   await saveCache();
   emit();
   return true;
@@ -176,7 +177,7 @@ export function discardOp(id) {
   if (op?.type === 'sale') {
     op.payload.p_items.forEach((it) => {
       const l = (state.levels[it.product_id] ||= {});
-      l[op.payload.p_branch] = (l[op.payload.p_branch] || 0) + it.qty;
+      l[op.payload.p_branch] = (l[op.payload.p_branch] || 0) + (it.packs ?? it.qty);
     });
   }
   state.outbox = state.outbox.filter((o) => o.id !== id);
@@ -194,7 +195,7 @@ export async function recordSale(sale) {
   // optimistic stock deduction
   payload.p_items.forEach((it) => {
     const l = (state.levels[it.product_id] ||= {});
-    l[payload.p_branch] = (l[payload.p_branch] || 0) - it.qty;
+    l[payload.p_branch] = (l[payload.p_branch] || 0) - (it.packs ?? it.qty);
   });
   const unpaid = sale.meta.total - (payload.p_amount_paid ?? sale.meta.total);
   if (payload.p_customer && unpaid > 0) {
