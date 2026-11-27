@@ -46,44 +46,63 @@ export async function renderProducts(el, ctx) {
         <button class="btn small" data-edit="${p.id}">${icon.edit}<span>Edit</span></button>
       </article>`).join('')}</div>` : empty('No products match');
   } else {
-    body.innerHTML = `<form id="qp"><div class="card flush"><div class="scroll"><table class="table price-table">
-      <thead><tr><th>Product</th><th class="num">Packs / carton</th><th class="num">Cost per carton (₦)</th><th class="num">Pack price (₦)</th><th class="num">Carton price (₦)</th><th class="num">Margin / pack</th></tr></thead>
-      <tbody>${list.map((p) => `<tr data-id="${p.id}">
-        <td><strong>${esc(p.name)}</strong></td>
-        <td class="num"><input type="number" min="1" name="ppc" value="${p.packs_per_carton}" aria-label="Packs per carton for ${esc(p.name)}"></td>
-        <td class="num"><input type="number" min="0" step="any" name="ccost" value="${cartonCost(p) || ''}" placeholder="0" aria-label="Cost per carton for ${esc(p.name)}"></td>
-        <td class="num"><input type="number" min="0" step="any" name="pprice" value="${Number(p.sell_price) || ''}" placeholder="0" aria-label="Pack price for ${esc(p.name)}"></td>
-        <td class="num"><input type="number" min="0" step="any" name="cprice" value="${Number(p.carton_price) || ''}" placeholder="auto" aria-label="Carton price for ${esc(p.name)}"></td>
-        <td class="num margin-cell"></td></tr>`).join('')}</tbody></table></div></div>
-      <div class="sticky-save"><span class="muted small" id="qp-status">Leave carton price empty to charge pack price × packs per carton.</span>
-      <button class="btn primary" id="qp-save">Save prices</button></div></form>`;
-    const form = body.querySelector('#qp');
-    const recalc = (tr) => {
-      const ppc = Math.max(1, Number(tr.querySelector('[name=ppc]').value || 1));
-      const cc = Number(tr.querySelector('[name=ccost]').value || 0), pp = Number(tr.querySelector('[name=pprice]').value || 0);
-      const m = pp - cc / ppc;
-      tr.querySelector('.margin-cell').innerHTML = pp ? `<span class="${m < 0 ? 'text-danger' : 'text-ok'}">${naira(m)}</span>` : '—';
-      tr.querySelector('[name=cprice]').placeholder = pp ? String(pp * ppc) : 'auto';
-      tr.dataset.dirty = '1';
+    body.innerHTML = `<div class="pe-help card">
+      <strong>How the numbers work</strong>
+      <span class="small">Cost per pack = <em>cost per carton ÷ packs in a carton</em>. Margin per pack = <em>pack price − cost per pack</em>.
+      If a carton price is empty, a carton sells at <em>pack price × packs in a carton</em>. Each row saves by itself a second after you stop typing.</span>
+      <span class="small">A yellow note means the numbers don't agree with each other. That usually means the packs-per-carton figure or one of the prices is wrong.</span>
+    </div>
+    <div class="pe-list" id="qp">${list.map((p) => `<div class="pe-row" data-id="${p.id}">
+        <div class="pe-name"><strong>${esc(p.name)}</strong><span class="pe-state muted small"></span></div>
+        <label>Packs in a carton<input type="number" inputmode="numeric" min="1" name="ppc" value="${p.packs_per_carton}"></label>
+        <label>Cost per carton (₦)<input type="number" inputmode="decimal" min="0" step="any" name="ccost" value="${Math.round(cartonCost(p) * 100) / 100 || ''}" placeholder="0"></label>
+        <label>Pack price (₦)<input type="number" inputmode="decimal" min="0" step="any" name="pprice" value="${Number(p.sell_price) || ''}" placeholder="0"></label>
+        <label>Carton price (₦)<input type="number" inputmode="decimal" min="0" step="any" name="cprice" value="${Number(p.carton_price) || ''}" placeholder="auto"></label>
+        <div class="pe-calc small"></div>
+      </div>`).join('')}</div>`;
+    const wrap = body.querySelector('#qp');
+    const read = (row) => {
+      const ppc = Math.max(1, parseInt(row.querySelector('[name=ppc]').value || '1', 10));
+      return { ppc, cc: Number(row.querySelector('[name=ccost]').value || 0), pp: Number(row.querySelector('[name=pprice]').value || 0), cp: Number(row.querySelector('[name=cprice]').value || 0) };
     };
-    form.querySelectorAll('tbody tr').forEach((tr) => { recalc(tr); delete tr.dataset.dirty; });
-    form.addEventListener('input', (e) => { const tr = e.target.closest('tr'); if (tr) recalc(tr); });
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const dirty = [...form.querySelectorAll('tbody tr[data-dirty]')];
-      if (!dirty.length) { toast('No changes to save.'); return; }
-      const btn = body.querySelector('#qp-save'); btn.disabled = true; btn.textContent = `Saving ${dirty.length}…`;
-      let failed = 0;
-      for (const tr of dirty) {
-        const ppc = Math.max(1, parseInt(tr.querySelector('[name=ppc]').value || '1', 10));
-        const row = { packs_per_carton: ppc, cost_price: Number(tr.querySelector('[name=ccost]').value || 0) / ppc,
-          sell_price: Number(tr.querySelector('[name=pprice]').value || 0), carton_price: Number(tr.querySelector('[name=cprice]').value || 0), updated_at: new Date().toISOString() };
-        const { error } = await sb.from('products').update(row).eq('id', tr.dataset.id);
-        if (error) failed++;
+    const check = (row) => {
+      const { ppc, cc, pp, cp } = read(row);
+      const costPack = cc / ppc; const cartonSell = cp || pp * ppc;
+      row.querySelector('[name=cprice]').placeholder = pp ? `auto ${(pp * ppc).toLocaleString()}` : 'auto';
+      const notes = [];
+      if (pp && cc) {
+        const m = pp - costPack; const pct = (m / pp) * 100;
+        if (m < 0) notes.push(`Pack price is below cost per pack (${naira(costPack, { dp: costPack % 1 ? 2 : 0 })}).`);
+        else if (pct > 25) notes.push(`Margin of ${pct.toFixed(0)}% is unusually high. Check the packs in a carton: with ${ppc} packs, each pack costs ${naira(costPack, { dp: costPack % 1 ? 2 : 0 })}.`);
+        if (cartonSell < cc) notes.push(`Carton sells for ${naira(cartonSell)}, below what it costs (${naira(cc)}).`);
       }
-      await refreshCore();
-      toast(failed ? `${failed} row(s) could not be saved.` : `Saved ${dirty.length} product${dirty.length === 1 ? '' : 's'}.`, failed ? 'danger' : 'info');
-      ctx.rerender();
+      if (pp && cp && Math.abs(cp - pp * ppc) / (pp * ppc) > 0.15) notes.push(`Carton price ${naira(cp)} is far from ${ppc} × ${naira(pp)} = ${naira(pp * ppc)}. Check the packs in a carton.`);
+      row.querySelector('.pe-calc').innerHTML = (pp && cc ? `<span>Cost per pack <strong>${naira(costPack, { dp: costPack % 1 ? 2 : 0 })}</strong> · margin <strong class="${pp - costPack < 0 ? 'text-danger' : 'text-ok'}">${naira(pp - costPack, { dp: (pp - costPack) % 1 ? 2 : 0 })}</strong> per pack (${(((pp - costPack) / pp) * 100).toFixed(1)}%) · carton sells for <strong>${naira(cartonSell)}</strong></span>`
+        : '<span class="muted">Enter the cost per carton and the pack price.</span>')
+        + notes.map((n) => `<div class="pe-note">${icon.alert}<span>${esc(n)}</span></div>`).join('');
+      row.classList.toggle('flag', notes.length > 0);
+    };
+    const save = async (row) => {
+      const st = row.querySelector('.pe-state');
+      const { ppc, cc, pp, cp } = read(row);
+      st.textContent = 'Saving…'; st.className = 'pe-state muted small';
+      const { error } = await sb.from('products').update({ packs_per_carton: ppc, cost_price: cc / ppc, sell_price: pp, carton_price: cp, updated_at: new Date().toISOString() }).eq('id', row.dataset.id);
+      if (error) { st.textContent = 'Not saved, check your connection'; st.className = 'pe-state small text-danger'; return; }
+      st.textContent = 'Saved ✓'; st.className = 'pe-state small text-ok';
+      const prod = state.products.find((x) => x.id === row.dataset.id);
+      if (prod) Object.assign(prod, { packs_per_carton: ppc, cost_price: cc / ppc, sell_price: pp, carton_price: cp });
+    };
+    const timers = new Map();
+    wrap.querySelectorAll('.pe-row').forEach(check);
+    wrap.addEventListener('input', (e) => {
+      const row = e.target.closest('.pe-row'); if (!row) return;
+      check(row);
+      row.querySelector('.pe-state').textContent = 'Editing…';
+      clearTimeout(timers.get(row)); timers.set(row, setTimeout(() => save(row), 900));
+    });
+    wrap.addEventListener('focusout', (e) => {
+      const row = e.target.closest('.pe-row'); if (!row || !timers.has(row)) return;
+      clearTimeout(timers.get(row)); timers.delete(row); save(row);
     });
   }
 

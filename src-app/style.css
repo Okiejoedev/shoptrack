@@ -343,3 +343,20 @@ fieldset { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14p
   .price-table input { width: 92px; }
 }
 .toolbar select { width: auto; min-width: 150px; }
+/* quick price entry */
+.pe-help { gap: 6px; }
+.pe-list { display: flex; flex-direction: column; gap: 10px; }
+.pe-row { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: grid; gap: 8px 12px;
+  grid-template-columns: minmax(160px, 1.4fr) repeat(4, minmax(0, 1fr)); align-items: end; box-shadow: var(--shadow); }
+.pe-row.flag { border-color: #F0C48F; background: #FFFCF7; }
+.pe-name { display: flex; flex-direction: column; gap: 2px; align-self: center; }
+.pe-row label { font-size: 12px; }
+.pe-row input { min-height: 40px; text-align: right; }
+.pe-calc { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 4px; color: var(--muted); }
+.pe-calc strong { color: var(--ink); }
+.pe-note { display: flex; gap: 6px; align-items: flex-start; color: var(--warn); font-weight: 500; }
+.pe-note svg { width: 16px; height: 16px; flex: none; margin-top: 2px; }
+@media (max-width: 760px) {
+  .pe-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pe-name { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; }
+}
