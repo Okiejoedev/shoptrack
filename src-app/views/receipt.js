@@ -11,8 +11,9 @@ export function receiptText(r) {
     ...r.items.map((i) => `${i.qty} × ${i.name} @ ${naira(i.unit_price)} = ${naira(i.qty * i.unit_price)}`),
     '',
     r.discount > 0 ? `Discount: −${naira(r.discount)}` : null,
+    r.porter > 0 ? `Porter: ${naira(r.porter)}` : null,
     `TOTAL: ${naira(r.total)}`,
-    `Paid (${METHOD_LABEL[r.method] || r.method}): ${naira(r.amount_paid)}`,
+    `Paid (${r.methodText || METHOD_LABEL[r.method] || r.method}): ${naira(r.amount_paid)}`,
     r.total - r.amount_paid > 0 ? `Balance owed: ${naira(r.total - r.amount_paid)}` : null,
     '',
     state.settings.receipt_footer || 'Thank you!',
@@ -30,9 +31,11 @@ export function receiptHtml(r) {
     ${r.status === 'void' ? '<div class="r-void">VOID</div>' : ''}
     <table class="r-items">${r.items.map((i) => `<tr><td>${num(i.qty)} × ${esc(i.name)}<div class="r-sub">@ ${naira(i.unit_price)}</div></td><td class="num">${naira(i.qty * i.unit_price)}</td></tr>`).join('')}</table>
     <table class="r-totals">
-      ${r.discount > 0 ? `<tr><td>Subtotal</td><td class="num">${naira(r.subtotal)}</td></tr><tr><td>Discount</td><td class="num">−${naira(r.discount)}</td></tr>` : ''}
+      ${r.discount > 0 || r.porter > 0 ? `<tr><td>Subtotal</td><td class="num">${naira(r.subtotal)}</td></tr>` : ''}
+      ${r.discount > 0 ? `<tr><td>Discount</td><td class="num">−${naira(r.discount)}</td></tr>` : ''}
+      ${r.porter > 0 ? `<tr><td>Porter</td><td class="num">${naira(r.porter)}</td></tr>` : ''}
       <tr class="r-total"><td>Total</td><td class="num">${naira(r.total)}</td></tr>
-      <tr><td>Paid · ${esc(METHOD_LABEL[r.method] || r.method)}</td><td class="num">${naira(r.amount_paid)}</td></tr>
+      <tr><td>Paid · ${esc(r.methodText || METHOD_LABEL[r.method] || r.method)}</td><td class="num">${naira(r.amount_paid)}</td></tr>
       ${r.change > 0 ? `<tr><td>Change</td><td class="num">${naira(r.change)}</td></tr>` : ''}
       ${owed > 0 ? `<tr><td><strong>Balance owed</strong></td><td class="num"><strong>${naira(owed)}</strong></td></tr>` : ''}
     </table>

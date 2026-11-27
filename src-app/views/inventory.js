@@ -7,7 +7,7 @@ const REASON = { opening: 'Opening stock', sale: 'Sale', restock: 'Stock receive
   transfer_in: 'Moved in', transfer_out: 'Moved out', return: 'Returned / void' };
 
 export async function bankOptions() {
-  if (!isOnline() || !isManager()) return [];
+  if (!isOnline() || !isManager() || !state.settings.show_bank) return [];
   const { data } = await sb.from('bank_accounts').select('id, name, bank_name, balance').eq('active', true).order('name');
   return data || [];
 }

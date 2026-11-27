@@ -1,9 +1,10 @@
 import { sb, state, isManager, isOnline, pendingSales, branchName, refreshCore } from '../store.js';
 import { esc, naira, icon, toast, modal, closeModal, fmtDateTime, todayISO, daysAgoISO, METHOD_LABEL, empty, needsOnline } from '../ui.js';
 import { showReceipt } from './receipt.js';
-import { toExcel, toPDF } from '../export.js';
+import { toExcel, toPDF, invoicePDF } from '../export.js';
 
 const f = { from: daysAgoISO(6), to: todayISO(), method: '', status: '', q: '' };
+METHOD_LABEL.mixed = 'Mixed';
 const STATUS = { paid: ['Paid', 'ok'], partial: ['Part-paid', 'warn'], credit: ['On credit', 'warn'], void: ['Void', 'danger'] };
 
 export async function renderSales(el, ctx) {
@@ -17,7 +18,7 @@ export async function renderSales(el, ctx) {
 
   if (!isOnline()) { el.innerHTML = pendingHtml + needsOnline('The full sales history'); return; }
 
-  let q = sb.from('sales').select('*, customers(name, phone), profiles(full_name)')
+  let q = sb.from('sales').select('*, customers(name, phone, address), profiles(full_name)')
     .gte('created_at', f.from + 'T00:00:00+01:00').lte('created_at', f.to + 'T23:59:59+01:00')
     .order('created_at', { ascending: false }).limit(500);
   if (state.branch !== 'all') q = q.eq('branch_id', state.branch);
@@ -44,10 +45,10 @@ export async function renderSales(el, ctx) {
   </div>
   <div class="summary-line"><strong>${live.length}</strong> sales · <strong>${naira(tot)}</strong>${mgr ? ` · profit <strong>${naira(live.reduce((a, s) => a + Number(s.profit), 0))}</strong>` : ''}${data.length >= 500 ? ' · showing the latest 500' : ''}</div>
   <div class="card flush"><div class="scroll"><table class="table stack clickable">
-    <thead><tr><th>Receipt</th><th>Date</th><th>Location</th><th>Customer</th><th>Cashier</th><th>Method</th><th>Status</th><th class="num">Total</th>${mgr ? '<th class="num">Profit</th>' : ''}</tr></thead>
+    <thead><tr><th>Receipt</th><th>Date</th><th>Type</th><th>Customer</th><th>Cashier</th><th>Method</th><th>Status</th><th class="num">Total</th>${mgr ? '<th class="num">Profit</th>' : ''}</tr></thead>
     <tbody>${list.length ? list.map((s) => `<tr data-sale="${s.id}" tabindex="0">
       <td><strong>#${s.receipt_no}</strong>${s.recorded_offline ? ' <span class="pill small" title="Recorded while offline">offline</span>' : ''}</td>
-      <td>${fmtDateTime(s.created_at)}</td><td>${esc(branchName(s.branch_id))}</td><td>${esc(s.customers?.name || 'Walk-in')}</td><td>${esc(s.profiles?.full_name || '')}</td>
+      <td>${fmtDateTime(s.created_at)}</td><td>${s.sale_mode === 'invoice' ? '<span class="pill">Invoice</span>' : 'Express'}</td><td>${esc(s.customers?.name || s.customer_name || 'Walk-in')}</td><td>${esc(s.profiles?.full_name || '')}</td>
       <td>${METHOD_LABEL[s.payment_method] || s.payment_method}</td><td><span class="pill ${STATUS[s.status][1]}">${STATUS[s.status][0]}</span></td>
       <td class="num"><strong>${naira(s.total)}</strong></td>${mgr ? `<td class="num">${naira(s.profit)}</td>` : ''}</tr>`).join('')
       : `<tr><td colspan="9">${empty('No sales in this range')}</td></tr>`}</tbody></table></div></div>`;
@@ -58,7 +59,7 @@ export async function renderSales(el, ctx) {
   el.querySelector('#s-method').onchange = (e) => { f.method = e.target.value; go(); };
   el.querySelector('#s-status').onchange = (e) => { f.status = e.target.value; go(); };
   el.querySelector('#s-q').onchange = (e) => { f.q = e.target.value; go(); };
-  const exportRows = () => list.map((s) => ({ Receipt: s.receipt_no, Date: fmtDateTime(s.created_at), Branch: branchName(s.branch_id), Customer: s.customers?.name || 'Walk-in',
+  const exportRows = () => list.map((s) => ({ Receipt: s.receipt_no, Date: fmtDateTime(s.created_at), Branch: branchName(s.branch_id), Customer: s.customers?.name || s.customer_name || 'Walk-in', Type: s.sale_mode === 'invoice' ? 'Invoice' : 'Express', 'Cash': Number(s.amount_paid) - Number(s.transfer_amount || 0), 'Transfer/POS': Number(s.transfer_amount || 0),
     Cashier: s.profiles?.full_name || '', Method: METHOD_LABEL[s.payment_method], Status: STATUS[s.status][0], Subtotal: Number(s.subtotal), Discount: Number(s.discount),
     Total: Number(s.total), Paid: Number(s.amount_paid), ...(mgr ? { Profit: Number(s.profit) } : {}) }));
   el.querySelector('#s-xlsx').onclick = () => toExcel(`sales-${f.from}-to-${f.to}`, [{ name: 'Sales', rows: exportRows() }]);
@@ -76,10 +77,15 @@ export async function renderSales(el, ctx) {
 async function openSale(s, ctx) {
   const { data: items } = await sb.from('sale_items').select('*').eq('sale_id', s.id);
   const r = { id: s.id, receipt_no: s.receipt_no, created_at: s.created_at, branch_id: s.branch_id, cashier: s.profiles?.full_name,
-    items: (items || []).map((i) => ({ name: `${i.product_name} (${i.sold_unit || 'pack'})`, qty: i.sold_qty ?? i.qty, unit_price: Number(i.sold_unit_price ?? i.unit_price) })),
-    subtotal: Number(s.subtotal), discount: Number(s.discount), total: Number(s.total), amount_paid: Number(s.amount_paid), method: s.payment_method,
-    customer: s.customers ? { name: s.customers.name, phone: s.customers.phone } : null, status: s.status };
+    items: (items || []).map((i) => ({ name: `${i.product_name} (${i.sold_unit || 'pack'})`, unit: i.sold_unit, qty: i.sold_qty ?? i.qty, unit_price: Number(i.sold_unit_price ?? i.unit_price) })),
+    subtotal: Number(s.subtotal), discount: Number(s.discount), porter: Number(s.porter_charge || 0), total: Number(s.total) + Number(s.porter_charge || 0), amount_paid: Number(s.amount_paid), method: s.payment_method,
+    methodText: s.payment_method === 'mixed' ? `Cash ${naira(Number(s.amount_paid) - Number(s.transfer_amount))} + transfer ${naira(s.transfer_amount)}` : null,
+    customer: s.customers ? { name: s.customers.name, phone: s.customers.phone, address: s.customers.address } : (s.customer_name || s.customer_phone ? { name: s.customer_name || 'Customer', phone: s.customer_phone } : null),
+    status: s.status, notes: s.note };
   showReceipt(r);
+  const acts = document.querySelector('.receipt-actions');
+  const inv = document.createElement('button'); inv.className = 'btn ghost'; inv.innerHTML = `${icon.download}<span>Invoice PDF</span>`;
+  inv.onclick = () => invoicePDF(r); acts.prepend(inv);
   if (isManager() && s.status !== 'void') {
     const actions = document.querySelector('.receipt-actions');
     const b = document.createElement('button'); b.className = 'btn danger'; b.innerHTML = `${icon.trash}<span>Void sale</span>`;

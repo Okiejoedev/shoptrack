@@ -126,7 +126,7 @@ function queue(type, payload, label) {
 }
 
 const RPC = {
-  sale: (p) => sb.rpc('record_sale', p),
+  sale: (p) => sb.rpc('record_sale_v2', p),
   restock: (p) => sb.rpc('record_stock_movement', p),
   customer_payment: (p) => sb.rpc('record_customer_payment', p),
   customer: (p) => sb.from('customers').upsert(p, { onConflict: 'id', ignoreDuplicates: true }),
@@ -191,6 +191,9 @@ export async function recordSale(sale) {
     p_id: sale.p_id, p_branch: sale.p_branch, p_items: sale.p_items, p_method: sale.p_method,
     p_amount_paid: sale.p_amount_paid, p_discount: sale.p_discount || 0, p_customer: sale.p_customer || null,
     p_created_at: new Date().toISOString(), p_offline: !isOnline(), p_device: navigator.userAgent.slice(0, 80), p_note: sale.p_note || null,
+    p_mode: sale.p_mode || 'express', p_transfer_amount: sale.p_transfer_amount || 0,
+    p_porter_fee: sale.p_porter_fee || 0, p_porter_name: sale.p_porter_name || null, p_porter_customer_pays: !!sale.p_porter_customer_pays,
+    p_customer_name: sale.p_customer_name || null, p_customer_phone: sale.p_customer_phone || null,
   };
   // optimistic stock deduction
   payload.p_items.forEach((it) => {
@@ -212,6 +215,40 @@ export async function recordSale(sale) {
   }
   return { offline: true, warnings: [] };
 }
+
+// ---------- open sales (tickets): several customers at once, parked sales survive a refresh ----------
+export const tickets = { list: [], active: { express: null, invoice: null } };
+let ticketTimer;
+export async function loadTickets() {
+  try { const t = await get('st-tickets-v1'); if (t) { tickets.list = t.list || []; tickets.active = t.active || tickets.active; } } catch (e) { /* ignore */ }
+}
+export function saveTickets() {
+  clearTimeout(ticketTimer);
+  ticketTimer = setTimeout(() => { set('st-tickets-v1', { list: tickets.list, active: tickets.active }).catch(() => {}); }, 150);
+  emit();
+}
+export function newTicket(mode = 'express') {
+  const used = new Set(tickets.list.map((t) => t.label));
+  let n = 1; while (used.has(`Customer ${n}`)) n++;
+  const t = { id: uuid(), mode, label: `Customer ${n}`, lines: [], customerId: '', customerName: '', customerPhone: '', customerAddress: '',
+    method: 'cash', paid: '', transfer: '', discount: '', discountPct: false, porterFee: '', porterName: '', porterCustomerPays: true,
+    dueDate: '', notes: '', createdAt: new Date().toISOString() };
+  tickets.list.push(t); tickets.active[mode] = t.id; saveTickets();
+  return t;
+}
+export function activeTicket(mode = 'express') {
+  let t = tickets.list.find((x) => x.id === tickets.active[mode] && x.mode === mode);
+  if (!t) t = tickets.list.find((x) => x.mode === mode) || newTicket(mode);
+  tickets.active[mode] = t.id;
+  return t;
+}
+export function closeTicket(id) {
+  const t = tickets.list.find((x) => x.id === id);
+  tickets.list = tickets.list.filter((x) => x.id !== id);
+  if (t && tickets.active[t.mode] === id) tickets.active[t.mode] = tickets.list.find((x) => x.mode === t.mode)?.id || null;
+  saveTickets();
+}
+export const parkedCount = () => tickets.list.filter((t) => t.lines.length && !(t.id === tickets.active[t.mode])).length;
 
 export async function recordRestock(productId, branchId, qty, note) {
   const payload = { p_id: uuid(), p_product: productId, p_branch: branchId, p_change: qty, p_reason: 'restock', p_note: note || null, p_created_at: new Date().toISOString() };

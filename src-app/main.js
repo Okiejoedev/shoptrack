@@ -1,9 +1,9 @@
 import './style.css';
-import { sb, state, loadLocal, refreshCore, flushOutbox, onChange, isOnline, isManager, isOwner, role,
+import { sb, state, loadLocal, loadTickets, parkedCount, refreshCore, flushOutbox, onChange, isOnline, isManager, isOwner, role,
   setForceOffline, setBranch, branchName, retryFailed, discardOp } from './store.js';
 import { esc, icon, toast, modal, fmtDateTime, fmtTime } from './ui.js';
 import { renderDashboard } from './views/dashboard.js';
-import { renderPOS } from './views/pos.js';
+import { renderExpress, renderInvoice, renderParked } from './views/sell.js';
 import { renderInventory } from './views/inventory.js';
 import { renderSales } from './views/sales.js';
 import { renderCustomers } from './views/customers.js';
@@ -19,8 +19,10 @@ import { renderBank } from './views/bank.js';
 
 const ROUTES = [
   { key: 'dashboard', label: 'Dashboard', icon: icon.dashboard, view: renderDashboard, roles: ['owner', 'manager', 'cashier'] },
-  { key: 'pos', label: 'Record sale', icon: icon.pos, view: renderPOS, roles: ['owner', 'manager', 'cashier'] },
-  { key: 'sales', label: 'Sales', icon: icon.sales, view: renderSales, roles: ['owner', 'manager', 'cashier'] },
+  { key: 'pos', label: 'Express sale', group: 'Sales (POS)', icon: icon.pos, view: renderExpress, roles: ['owner', 'manager', 'cashier'] },
+  { key: 'invoice', label: 'Full invoice sale', group: 'Sales (POS)', icon: icon.sales, view: renderInvoice, roles: ['owner', 'manager', 'cashier'] },
+  { key: 'parked', label: 'Parked sales', group: 'Sales (POS)', icon: icon.history, view: renderParked, roles: ['owner', 'manager', 'cashier'] },
+  { key: 'sales', label: 'Sales history', group: 'Sales (POS)', icon: icon.reports, view: renderSales, roles: ['owner', 'manager', 'cashier'] },
   { key: 'inventory', label: 'Inventory', icon: icon.inventory, view: renderInventory, roles: ['owner', 'manager', 'cashier'] },
   { key: 'products', label: 'Products (admin)', icon: icon.tag, view: renderProducts, roles: ['owner', 'manager'] },
   { key: 'customers', label: 'Customers', icon: icon.customers, view: renderCustomers, roles: ['owner', 'manager', 'cashier'] },
@@ -35,6 +37,8 @@ const ROUTES = [
 ];
 
 const app = document.getElementById('app');
+// bank accounts stay hidden until a bank is linked (Settings can switch manual tracking on)
+const visibleRoutes = () => ROUTES.filter((x) => x.roles.includes(role()) && (x.key !== 'bank' || state.settings.show_bank));
 
 // label table cells so tables can stack into cards on phones
 const labeller = new MutationObserver(() => {
@@ -50,7 +54,7 @@ let renderToken = 0;
 
 function route() {
   const key = (location.hash.replace(/^#\/?/, '') || (role() === 'cashier' ? 'pos' : 'dashboard')).split('?')[0];
-  return ROUTES.find((r) => r.key === key && r.roles.includes(role())) || ROUTES[0];
+  return visibleRoutes().find((r) => r.key === key) || ROUTES[0];
 }
 
 // ---------- login ----------
@@ -120,12 +124,22 @@ function branchPicker() { return ''; }
 function renderShell() {
   const r = route();
   currentRoute = r.key;
-  const nav = ROUTES.filter((x) => x.roles.includes(role()));
+  const nav = visibleRoutes();
+  const parked = parkedCount();
+  const navHtml = (() => {
+    let out = '', open = null;
+    nav.forEach((x) => {
+      if (x.group !== open) { if (open) out += '</div>'; if (x.group) out += `<div class="nav-group"><div class="nav-group-title">${icon.pos}<span>${x.group}</span></div>`; open = x.group || null; }
+      out += `<a href="#/${x.key}" class="nav-link ${x.group ? 'sub' : ''} ${x.key === r.key ? 'active' : ''}" ${x.key === r.key ? 'aria-current="page"' : ''}>${x.icon}<span>${x.label}</span>${x.key === 'parked' && parked ? `<b class="nav-badge">${parked}</b>` : ''}</a>`;
+    });
+    if (open) out += '</div>';
+    return out;
+  })();
   app.innerHTML = `
   <div class="shell">
     <aside class="sidebar" id="sidebar">
       <div class="brand"><span class="logo">A</span><div><div class="brand-name">${esc(state.settings.business_name || 'Anayo 5PS Enterprises')}</div><div class="brand-sub">Sales &amp; inventory</div></div></div>
-      <nav aria-label="Main">${nav.map((x) => `<a href="#/${x.key}" class="nav-link ${x.key === r.key ? 'active' : ''}" ${x.key === r.key ? 'aria-current="page"' : ''}>${x.icon}<span>${x.label}</span></a>`).join('')}</nav>
+      <nav aria-label="Main">${navHtml}</nav>
       <div class="sidebar-foot">
         <div class="me"><div class="avatar">${esc((state.profile?.full_name || '?').slice(0, 1))}</div>
         <div><div class="me-name">${esc(state.profile?.full_name || '')}</div><div class="me-role">${esc(role())}</div></div></div>
@@ -150,7 +164,7 @@ function renderShell() {
     <div class="scrim" id="scrim"></div>
     <nav class="bottom-nav" aria-label="Quick links">
       ${['dashboard', 'pos', 'sales', 'inventory'].map((k) => { const x = ROUTES.find((y) => y.key === k);
-        return `<a href="#/${k}" class="${k === r.key ? 'active' : ''} ${k === 'pos' ? 'sell' : ''}" ${k === r.key ? 'aria-current="page"' : ''}>${x.icon}<span>${k === 'pos' ? 'Sell' : k === 'inventory' ? 'Stock' : x.label}</span></a>`; }).join('')}
+        return `<a href="#/${k}" class="${k === r.key ? 'active' : ''} ${k === 'pos' ? 'sell' : ''}" ${k === r.key ? 'aria-current="page"' : ''}>${x.icon}<span>${k === 'pos' ? 'Sell' : k === 'inventory' ? 'Stock' : k === 'sales' ? 'Sales' : x.label}</span></a>`; }).join('')}
       <button type="button" id="bottom-more">${icon.menu}<span>More</span></button>
     </nav>
   </div>`;
@@ -225,6 +239,8 @@ async function renderView() {
 onChange(() => {
   const slot = document.getElementById('sync-slot');
   if (slot) { slot.innerHTML = syncPill(); bindSyncPill(); }
+  const pl = document.querySelector('.nav-link[href="#/parked"]');
+  if (pl) { const n = parkedCount(); let b = pl.querySelector('.nav-badge'); if (n) { if (!b) { b = document.createElement('b'); b.className = 'nav-badge'; pl.appendChild(b); } b.textContent = n; } else b?.remove(); }
 });
 
 window.addEventListener('hashchange', () => {
@@ -239,6 +255,7 @@ setInterval(() => { if (isOnline()) flushOutbox(); }, 30000);
 // ---------- boot ----------
 (async function boot() {
   await loadLocal();
+  await loadTickets();
   const { data } = await sb.auth.getSession();
   state.session = data.session;
   if (!state.session) { renderLogin(); return; }

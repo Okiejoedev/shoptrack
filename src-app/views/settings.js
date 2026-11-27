@@ -14,6 +14,7 @@ export async function renderSettings(el, ctx) {
         <label>Business name<input name="business_name" value="${esc(s.business_name || '')}" required></label>
         <label>Phone on receipts<input name="phone" value="${esc(s.phone || '')}"></label>
         <label>Receipt footer<input name="receipt_footer" value="${esc(s.receipt_footer || '')}"></label>
+        <label class="check"><input type="checkbox" name="show_bank" ${s.show_bank ? 'checked' : ''}> Show the Bank accounts page (manual tracking until a bank is linked)</label>
         <label>Currency<input value="Nigerian naira (₦)" disabled></label>
         <div class="row end"><button class="btn primary">Save</button></div>
       </form>
@@ -33,7 +34,7 @@ export async function renderSettings(el, ctx) {
   el.querySelector('#bf').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = formData(e.target);
-    const { error } = await sb.from('settings').update({ ...f, updated_at: new Date().toISOString() }).eq('id', 1);
+    const { error } = await sb.from('settings').update({ ...f, show_bank: !!f.show_bank, updated_at: new Date().toISOString() }).eq('id', 1);
     if (error) { toast(error.message, 'danger'); return; }
     await refreshCore(); toast('Saved'); ctx.rerender();
   });
